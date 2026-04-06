@@ -38,14 +38,14 @@ Debezium watches the PostgreSQL WAL and publishes every row change to Kafka. A P
 
 ## Key Design Decisions
 
-| Decision | Why |
-|----------|-----|
-| WAL-based CDC over polling | Captures every state transition, zero load on source DB |
-| Kafka over RabbitMQ | Durable log with replay capability for event sourcing |
-| JSONB event log | Schema-agnostic — new columns in source DB just appear as new JSON fields |
-| UUID5-based dedup | Deterministic event IDs from table + LSN + txId + key. Same event = same ID |
-| Materialized snapshots | Current state derived from events, not copied from source. Can rebuild anytime |
-| Dead letter queue | Failed events get stored, not dropped. Pipeline keeps running |
+| Decision                   | Why                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| WAL-based CDC over polling | Captures every state transition, zero load on source DB                        |
+| Kafka over RabbitMQ        | Durable log with replay capability for event sourcing                          |
+| JSONB event log            | Schema-agnostic — new columns in source DB just appear as new JSON fields      |
+| UUID5-based dedup          | Deterministic event IDs from table + LSN + txId + key. Same event = same ID    |
+| Materialized snapshots     | Current state derived from events, not copied from source. Can rebuild anytime |
+| Dead letter queue          | Failed events get stored, not dropped. Pipeline keeps running                  |
 
 Full rationale in [02-DECISIONS.md](02-DECISIONS.md) (8 ADRs).
 
@@ -110,7 +110,29 @@ In a new terminal:
 streamlit run src/dashboard.py
 ```
 
-Opens at `http://localhost:8501` with 5 pages: Pipeline Overview, Event Stream, Order Snapshots, Inventory, Performance Metrics.
+Opens at `http://localhost:8501`. Use the sidebar to navigate between 5 pages:
+
+## Dashboard
+
+**Pipeline Overview** -
+![Pipeline Overview](docs/pipeline_overview.png)
+Top-level health check. Five summary metrics (total events, orders tracked, inventory items, dead letters, errors) give an instant read on pipeline status. The bar chart breaks down events by source table: inventory and orders dominate because each order lifecycle touches both. The pie chart shows operation mix (66% UPDATE, 28% CREATE, 5% READ) which makes sense because orders go through 4+ state transitions per lifecycle. The Data Flow section on the bottom shows the full pipeline architecture.
+
+**Event Stream** -
+![Event Stream](docs/event_stream_1.png)
+Filterable event log with per-event lag measurement.
+
+**Processing Lag & Timeline** -
+![Lag Distribution & Timeline](docs/event_stream_2.png)
+The histogram shows how processing lag is distributed - most events land in the 1-3 second range, with a long tail up to 9 seconds for events that were queued in Kafka during bursts. The two clusters (Apr 4 and Apr 7) in bottom graph correspond to two separate simulator burst runs. You can see that customers and products only fire once (seed data), while orders and inventory generate continuous events.
+
+**Order Snapshots** -
+![Order Snapshots](docs/order_snapshots.png)
+Current state of all orders derived from CDC events. The status bar chart shows the order lifecycle distribution — 48 delivered, 10 paid (in progress), 5 cancelled, 2 refunded. The revenue pie chart shows 92.7% of revenue comes from delivered orders. The Order Lifecycle Flow table at the bottom shows actual state transitions captured by CDC: 65 CREATED events, 60 CREATED→PAID transitions, 48 SHIPPED→DELIVERED, and 5 CREATED→CANCELLED.
+
+**Inventory Snapshots** -
+![Inventory](docs/inventory.png)
+Real-time stock levels for all 15 products, computed from CDC events. The stacked bar chart shows available (green) vs reserved (red) quantities. Products like Uniqlo Down Jacket (290 available, 0 reserved) have plenty of stock, while Nike Air Max 90 (178 available, 4 reserved) shows active reservation. The `available` column is a PostgreSQL GENERATED column that auto-computes `quantity - reserved`. The table below shows exact numbers with the last update timestamp.
 
 ### 5. Monitor via CLI
 
@@ -175,11 +197,11 @@ Compares analytics snapshots against source DB to prove they match.
 
 See [docs/cost-analysis.md](docs/cost-analysis.md) for full breakdown. Summary:
 
-| Component | AWS (monthly) |
-|-----------|--------------|
-| Kafka (MSK t3.small x2) | ~$30 |
-| Source DB (RDS db.t3.micro) | ~$15 |
-| Analytics DB (RDS db.t3.micro) | ~$15 |
-| Debezium (ECS Fargate 0.5 vCPU) | ~$15 |
-| Consumer (ECS Fargate 0.25 vCPU) | ~$8 |
-| **Total** | **~$83/month** |
+| Component                        | AWS (monthly)  |
+| -------------------------------- | -------------- |
+| Kafka (MSK t3.small x2)          | ~$30           |
+| Source DB (RDS db.t3.micro)      | ~$15           |
+| Analytics DB (RDS db.t3.micro)   | ~$15           |
+| Debezium (ECS Fargate 0.5 vCPU)  | ~$15           |
+| Consumer (ECS Fargate 0.25 vCPU) | ~$8            |
+| **Total**                        | **~$83/month** |

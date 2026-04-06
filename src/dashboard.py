@@ -17,15 +17,19 @@ from datetime import datetime, timedelta
 # Try Streamlit secrets first, then environment variables
 try:
     import streamlit as st
-    if hasattr(st, 'secrets') and 'database' in st.secrets:
-        DB_CONFIG = {
-            "host": st.secrets.database.DB_HOST,
-            "port": int(st.secrets.database.DB_PORT),
-            "dbname": st.secrets.database.DB_NAME,
-            "user": st.secrets.database.DB_USER,
-            "password": st.secrets.database.DB_PASSWORD,
-        }
-    else:
+    # More robust secrets check to avoid StreamlitSecretNotFoundError
+    try:
+        if hasattr(st, 'secrets') and hasattr(st.secrets, 'database'):
+            DB_CONFIG = {
+                "host": st.secrets.database.DB_HOST,
+                "port": int(st.secrets.database.DB_PORT),
+                "dbname": st.secrets.database.DB_NAME,
+                "user": st.secrets.database.DB_USER,
+                "password": st.secrets.database.DB_PASSWORD,
+            }
+        else:
+            raise AttributeError("No secrets.database found")
+    except (AttributeError, Exception):
         # Fallback to environment variables
         DB_CONFIG = {
             "host": os.getenv("ANALYTICS_DB_HOST", "localhost"),
