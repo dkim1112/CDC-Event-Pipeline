@@ -14,13 +14,35 @@ from datetime import datetime, timedelta
 
 # ── DB connection ──
 
-DB_CONFIG = {
-    "host": os.getenv("ANALYTICS_DB_HOST", "localhost"),
-    "port": int(os.getenv("ANALYTICS_DB_PORT", "5434")),
-    "dbname": os.getenv("ANALYTICS_DB_NAME", "analytics_db"),
-    "user": os.getenv("ANALYTICS_DB_USER", "analytics_user"),
-    "password": os.getenv("ANALYTICS_DB_PASSWORD", "analytics_pass"),
-}
+# Try Streamlit secrets first, then environment variables
+try:
+    import streamlit as st
+    if hasattr(st, 'secrets') and 'database' in st.secrets:
+        DB_CONFIG = {
+            "host": st.secrets.database.DB_HOST,
+            "port": int(st.secrets.database.DB_PORT),
+            "dbname": st.secrets.database.DB_NAME,
+            "user": st.secrets.database.DB_USER,
+            "password": st.secrets.database.DB_PASSWORD,
+        }
+    else:
+        # Fallback to environment variables
+        DB_CONFIG = {
+            "host": os.getenv("ANALYTICS_DB_HOST", "localhost"),
+            "port": int(os.getenv("ANALYTICS_DB_PORT", "5434")),
+            "dbname": os.getenv("ANALYTICS_DB_NAME", "analytics_db"),
+            "user": os.getenv("ANALYTICS_DB_USER", "analytics_user"),
+            "password": os.getenv("ANALYTICS_DB_PASSWORD", "analytics_pass"),
+        }
+except ImportError:
+    # Streamlit not available, use environment variables
+    DB_CONFIG = {
+        "host": os.getenv("ANALYTICS_DB_HOST", "localhost"),
+        "port": int(os.getenv("ANALYTICS_DB_PORT", "5434")),
+        "dbname": os.getenv("ANALYTICS_DB_NAME", "analytics_db"),
+        "user": os.getenv("ANALYTICS_DB_USER", "analytics_user"),
+        "password": os.getenv("ANALYTICS_DB_PASSWORD", "analytics_pass"),
+    }
 
 
 @st.cache_resource
